@@ -1,0 +1,52 @@
+name: Fetch repository descriptions
+
+on:
+  push:
+    paths:
+      - "sipgateio-cli-projects"
+
+  workflow_dispatch:
+
+jobs:
+  fetch_descriptions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: fetchRepositorysDescription
+        run: |
+          fileItemString=$(cat sipgateio-cli-projects |tr "\n" " ")
+
+          repositories=($fileItemString)
+
+          echo $repositories
+
+          # Initialize an empty array to store the descriptions
+          descriptions=()
+
+          # Iterate over the repository names
+          for repository in "${repositories[@]}"; do
+            # Fetch the repository data from the GitHub API
+            response=$(curl -s "https://api.github.com/repos/sipgate-io/${repository}")
+
+            # Extract the description from the repository data
+            description=$(echo "$response" | jq -r .description)
+
+            # Add the repository and description to the descriptions array
+            descriptions+=( "{\"repository\":\"$repository\",\"description\":\"$description\"}" )
+          done
+
+          # Join the descriptions into a single JSON array string
+          descriptions_json=$(printf ",%s" "${descriptions[@]}")
+          descriptions_json="[${descriptions_json:1}]"
+
+          # Write the descriptions to the file 'sipgateio-cli-projects-lock.json'
+          echo "$descriptions_json" > sipgateio-cli-projects-lock.json
+
+          git config user.name 'sipgateio-team'
+          git config user.email 'sipgateio-team@users.noreply.github.com'
+
+          git pull
+
+          git add sipgateio-cli-projects-lock.json
+          git commit -m "Updated sipgateio-cli-projects-lock.json"
+          git push origin main
